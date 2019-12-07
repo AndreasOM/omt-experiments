@@ -8,7 +8,7 @@ OMT_PACKER=packer/target/debug/packer
 
 # omt-packer Data base.omar @Data/data.paklist
 
-${OMT_PACKER} --basedir testdata --output test1223334444.omar --paklist testdata/testdata122334444.paklist
+${OMT_PACKER} --basepath testdata --output testdata/test1223334444.omar --paklist testdata/testdata122334444.paklist
 
 
 # TEST
