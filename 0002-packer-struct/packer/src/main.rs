@@ -150,6 +150,13 @@ fn packer(
 ) -> Result<u32,&'static str> {
 	let mut archive = Archive::create(basepath);
 
+	// :PLAN:
+	/*
+	for filename in Helper::open_filelist(paklist) {
+		archive.add_entry( &filename );		
+	} // plus error handling
+	*/
+	
 	// iterate over paklist to get list of files needed
 	let paklist_file = File::open(paklist);
 
