@@ -33,6 +33,7 @@ impl Entry {
 
 		// :TODO: calculate actual CRC name
 		let downcase_name = filename.to_lowercase();
+		// Ruby: .gsub( /\W\./, ' ' ) // should be 'a-zA-Z0-9_', but actual code behaves differently
 		let clean_name: String = downcase_name.chars().map(|c| match c {
 			'0'..='9' => c,
 			'a'..='z' => c,
@@ -147,12 +148,9 @@ fn packer(
 		paklist:&String,
 		output:&String,
 ) -> Result<u32,&'static str> {
-
-	// create a new archive
 	let mut archive = Archive::create(basepath);
 
 	// iterate over paklist to get list of files needed
-
 	let paklist_file = File::open(paklist);
 
 	// :TODO: rethink error handling
