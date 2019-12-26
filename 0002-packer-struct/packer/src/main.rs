@@ -2,7 +2,7 @@
 use byteorder::{LittleEndian, WriteBytesExt};
 
 extern crate clap;
-use clap::{Arg, App};
+use clap::{Arg, App, SubCommand};
 
 use crc::{crc32, Hasher32};
 
@@ -187,46 +187,51 @@ fn main() {
 	let matches = App::new("omt-packer")
 					.version("0.2")
 					.author("Andreas N. <andreas@omni-mad.com>")
-					.about("Packs data into archive")
-					.arg(Arg::with_name("basepath")
-						.long("basepath")
-						.value_name("BASEPATH")
-						.help("Set the base path (for relative names)")
-						.takes_value(true)
-					)
-					.arg(Arg::with_name("output")
-						.long("output")
-						.value_name("OUTPUT")
-						.help("Set the output filename")
-						.takes_value(true)
-					)
-					.arg(Arg::with_name("paklist")
-						.long("paklist")
-						.value_name("PAKLIST")
-						.help("Set the pakelist name")
-						.takes_value(true)
+					.about("Packs data into archive, or unpacks data from archive")
+					.subcommand(SubCommand::with_name("pack")
+						.arg(Arg::with_name("basepath")
+							.long("basepath")
+							.value_name("BASEPATH")
+							.help("Set the base path (for relative names)")
+							.takes_value(true)
+						)
+						.arg(Arg::with_name("output")
+							.long("output")
+							.value_name("OUTPUT")
+							.help("Set the output filename")
+							.takes_value(true)
+						)
+						.arg(Arg::with_name("paklist")
+							.long("paklist")
+							.value_name("PAKLIST")
+							.help("Set the pakelist name")
+							.takes_value(true)
+						)
 					)
 					.get_matches();
 
 //	println!("{:?}", matches);
+//	println!("{:?}", matches.subcommand());
 
-	let basepath = matches.value_of("basepath").unwrap_or(".").to_string();
-	let output = matches.value_of("output").unwrap_or("out.omar").to_string();
-	let paklist = matches.value_of("paklist").unwrap_or("").to_string();
+	if let ("pack", Some( sub_matches ) ) = matches.subcommand() {
+		let basepath = sub_matches.value_of("basepath").unwrap_or(".").to_string();
+		let output = sub_matches.value_of("output").unwrap_or("out.omar").to_string();
+		let paklist = sub_matches.value_of("paklist").unwrap_or("").to_string();
 
 
-	println!("basepath: {:?}", basepath );
-	println!("output  : {:?}", output );
-	println!("paklist : {:?}", paklist );
+		println!("basepath: {:?}", basepath );
+		println!("output  : {:?}", output );
+		println!("paklist : {:?}", paklist );
 
-	match packer( &basepath, &paklist, &output ) {
-		Ok( number_of_files ) => {
-				println!("{:?} files added to archive", number_of_files );
-				process::exit( 0 );
+		match packer( &basepath, &paklist, &output ) {
+			Ok( number_of_files ) => {
+					println!("{:?} files added to archive", number_of_files );
+					process::exit( 0 );
+				},
+			Err( e ) => {
+				println!("Error {:?}", e );
+				process::exit( -1 );
 			},
-		Err( e ) => {
-			println!("Error {:?}", e );
-			process::exit( -1 );
-		},
+		}
 	}
 }
