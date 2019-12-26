@@ -37,11 +37,11 @@ impl Entry {
 		let clean_name: String = downcase_name.chars().map(|c| match c {
 			'0'..='9' => c,
 			'a'..='z' => c,
-//			'A'..='Z' => c,	// already downcase
-			'_' => c,
-			'.' => c,
-			'-' => c,
-			'%' => c,
+	//			'A'..='Z' => c,	// already downcase
+			'!'..='@' => c,
+			'['..='`' => c,
+			'{'..='~' => c,
+	//		0x7f => c,			// ignore DEL
 			_ => ' '
 		}).collect();
 		let crc = crc32::checksum_ieee(clean_name.as_bytes());
@@ -156,7 +156,7 @@ fn packer(
 		archive.add_entry( &filename );		
 	} // plus error handling
 	*/
-	
+
 	// iterate over paklist to get list of files needed
 	let paklist_file = File::open(paklist);
 
