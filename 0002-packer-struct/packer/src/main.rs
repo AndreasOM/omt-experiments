@@ -143,6 +143,31 @@ impl Archive {
 	} 
 }
 
+struct Helper {
+
+}
+
+impl Helper {
+	fn filenames_in_file(filename: &String) -> Result<Vec<String>, &'static str> {
+		let file = File::open(filename);
+
+		let file = match file {
+			Ok( p ) => p,
+			Err( _e ) => return Err("Error reading file"),
+		};
+
+		let bufreader = BufReader::new(file);
+
+		let mut files: Vec<String> = Vec::new();
+		for line in bufreader.lines() {
+			let filename = line.unwrap();
+			files.push( filename );
+		}
+
+		Ok(files)
+	}
+}
+
 fn packer(
 		basepath:&String,
 		paklist:&String,
@@ -150,30 +175,9 @@ fn packer(
 ) -> Result<u32,&'static str> {
 	let mut archive = Archive::create(basepath);
 
-	// :PLAN:
-	/*
-	for filename in Helper::open_filelist(paklist) {
-		archive.add_entry( &filename );		
-	} // plus error handling
-	*/
-
-	// iterate over paklist to get list of files needed
-	let paklist_file = File::open(paklist);
-
-	// :TODO: rethink error handling
-	let paklist_file = match paklist_file {
-		Ok( p ) => p,
-		Err( _e ) => return Err("Error reading file"),
-	};
-
-	let paklist_bufreader = BufReader::new(paklist_file);
-
-	let mut files: Vec<Entry> = Vec::new();
-	for line in paklist_bufreader.lines() {
-		let filename = line.unwrap();
+	for filename in Helper::filenames_in_file(paklist).unwrap_or( Vec::new() ) {	// :TODO: add better error handling
 		println!("{:?}", filename );
-
-		archive.add_entry( &filename );
+		archive.add_entry( &filename );		
 	}
 
 	archive.save( output )
@@ -181,7 +185,7 @@ fn packer(
 
 fn main() {
 	let matches = App::new("omt-packer")
-					.version("0.1")
+					.version("0.2")
 					.author("Andreas N. <andreas@omni-mad.com>")
 					.about("Packs data into archive")
 					.arg(Arg::with_name("basepath")
