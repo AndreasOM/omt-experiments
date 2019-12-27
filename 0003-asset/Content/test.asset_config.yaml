@@ -1,0 +1,12 @@
+tool:    "atlas"
+command: "combine"
+output:  "seaweed-atlas-%d"
+input:
+  - "seaweed/seaweed-g-*.png"
+  - "seaweed/seaweed-a-*.png"
+  - "corals/coral-*.png"
+  - "test/something.png"
+parameters: {
+  size: 2048,
+  border: 2
+}
