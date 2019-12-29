@@ -1,16 +1,131 @@
 
 use clap::{Arg, App, SubCommand};
 use glob::glob;
+use regex::Regex;
+use std::collections::HashMap;
+use std::fmt;
 use std::fs::File;
 use std::io::prelude::*;
 use std::process;
+use std::process::Command;
 use yaml_rust::YamlLoader;
+use yaml_rust::Yaml;
+
+#[derive(Clone,Hash,Eq,PartialEq,Debug)]
+enum ParameterValue {
+	NoValue,
+	IntegerValue(i64),
+	StringValue(String),
+}
+
+impl fmt::Display for ParameterValue {
+	fn fmt(&self, f: &mut fmt::Formatter ) -> fmt::Result {
+		match self {
+			ParameterValue::NoValue => write!(f, "NOVALUE"),
+			ParameterValue::IntegerValue( i ) => write!(f, "{}", i),
+			ParameterValue::StringValue( s ) => write!(f, "\"{}\"", s ),
+
+		}
+//		write!(f, "FUU")
+	}
+}
+
+struct ToolRun {
+	tool: String,
+	command: String,
+	output: String,
+	input: Vec<String>,
+	parameters: HashMap<String,ParameterValue>,
+	cmd_line: String,
+}
+
+impl ToolRun {
+	fn new(
+		tool: &str,
+		command: &str,
+		output: &str,
+		input: &Vec<String>,
+		parameters: &HashMap<String,ParameterValue>,
+		cmd_line: &str,
+	) -> ToolRun
+	{
+		ToolRun {
+			tool: tool.to_string(),
+			command: command.to_string(),
+			output: output.to_string(),
+			input: input.clone(),
+			parameters: parameters.clone(),
+			cmd_line: cmd_line.to_string(),
+		}
+	}
+}
 
 struct Asset{
-
 }
 
 impl Asset{
+
+	fn tool_asset(
+		tool_run: &ToolRun,
+	)
+	-> Result<u32,&'static str> {
+		match tool_run.command.as_ref() {
+			"" => {
+				println!("NO command for asset tool" );
+				Ok(0)	// :TODO: return error
+			},
+			"dump" => {
+				println!("command.  : {:?}", tool_run.command );
+				println!("output    : {:?}", tool_run.output );
+				println!("input     : {:?}", tool_run.input );
+				println!("parameters: {:?}", tool_run.parameters );
+				Ok(0)
+			},
+			cmd => {
+				println!("Unhandled asset tool command: {:?}", cmd );
+				Ok(0)	// :TODO: return error
+			},
+		}
+	}
+
+	fn tool_call_external(
+		tool_run: &ToolRun,
+	)
+	-> Result<u32,&'static str> {
+		let cmd_line = tool_run.cmd_line.clone();
+		let re = Regex::new(r"\$\{(.*?)\}").unwrap();
+
+		let cmd_line = re.replace_all(
+			&cmd_line,
+			|c: &regex::Captures| {
+				let placeholder = c.get(1).map_or( "", |m| m.as_str() );
+				println!("Found {:?}", placeholder );
+				match placeholder {
+					"" => "".to_string(),
+					"tool" => tool_run.tool.clone(),
+					"command" => tool_run.command.clone(),
+					"output" => format!("\"{}\"", tool_run.output).clone(),
+					"input" => {
+						tool_run.input.iter().map( |s|
+							format!("\t\"{}\"", s).clone()
+						).collect::<Vec<_>>().join(" ").to_string()
+					},
+					param => {
+						println!("{:?}", tool_run.parameters.get( param ) );
+						tool_run.parameters.get( param ).unwrap_or( &ParameterValue::NoValue ).to_string()
+					},
+				}
+			}
+		);
+		println!("Calling\n{}", cmd_line );
+//		let output = Command::new("/bin/sh").args(&["-c", "echo", ""]).output();
+//		let output = Command::new("/bin/sh").args(&["-c", "date", ""]).output();
+		let output = Command::new("/bin/sh").args(&["-c", &cmd_line]).output();
+		println!("Output: {:?}", output );
+		Ok(0)
+	}
+
+
 	fn build (
 		content_directory: &String,
 		data_directory: &String,
@@ -36,7 +151,7 @@ impl Asset{
 
 		for config_file in config_files {
 			// read yaml
-			println!("===\n{:?}", config_file );
+//			println!("===\n{:?}", config_file );
 			let mut file = File::open( config_file ).expect( "Failed opening file" );
 			let mut config = String::new();
 			file.read_to_string(&mut config).expect( "Failed reading file" );
@@ -45,17 +160,18 @@ impl Asset{
 			// parse yaml
 //			println!("YAML: {:?}", yaml );
 			for doc in yaml {
-				println!("---");
-				let tool = doc["tool"].as_str();
-				let command = doc["command"].as_str();
-				let output = doc["output"].as_str();
+//				println!("---");
+				let tool = doc["tool"].as_str().unwrap_or("");
+				let command = doc["command"].as_str().unwrap_or("");
+				let output = doc["output"].as_str().unwrap_or("");
+				let cmd_line = doc["cmd_line"].as_str().unwrap_or("");
 				let mut input = Vec::new();
 
-				if( doc["input"].is_array()){
+				if doc["input"].is_array() {
 					match doc["input"].as_vec() {
 						None => {},
 						Some(i) => {
-							println!("i: {:?}", i );
+//							println!("i: {:?}", i );
 							for i in i {
 								match i.as_str() {
 									None => {},
@@ -73,16 +189,52 @@ impl Asset{
 				}
 //				let input = doc["input"].as_str();
 
-				println!("tool   : {:?}", tool );
-				println!("command: {:?}", command );
-				println!("output : {:?}", output );
-				println!("input  : {:?}", input );
+				let mut parameters = HashMap::new();
 
+				match doc["parameters"].as_hash() {
+					None => {},
+					Some(params) => {
+						for (name, value) in params {
+//							println!("name: {:?} -> {:?}", name, value );
+							let value = match value {
+								Yaml::Integer( v ) => ParameterValue::IntegerValue( *v ),
+								Yaml::String( v ) => ParameterValue::StringValue( v.clone() ),
+								x => {
+									println!("Unhandled parameter value {:?}", x );
+									ParameterValue::NoValue
+								}
+							};
+							let name = match name.as_str() {
+								Some( s ) => s.to_string(),
+								x => { println!("Unhandled name type {:?}", x ); "".to_string() },
+							};
+							parameters.insert( name, value );
+						}
+					}
+				};
+/*
+				println!("tool      : {:?}", tool );
+				println!("command.  : {:?}", command );
+				println!("output    : {:?}", output );
+				println!("input     : {:?}", input );
+				println!("parameters: {:?}", parameters );
+*/
+				let tool_run = ToolRun::new( &tool, &command, &output, &input, &parameters, &cmd_line );
 				// call tool
 				match tool {
-					Some("noop") => println!("NOOP -> Do nothing"),
-					Some( tool ) => println!("Command {:?} not implemented", tool ),
-					None => continue,
+					""			=> continue,
+					"noop"		=> println!("NOOP -> Do nothing"),
+					"$asset"	=> {
+						println!("$asset command found");
+						Asset::tool_asset( &tool_run );
+					}
+					"echo"		=> {
+						Asset::tool_call_external( &tool_run );
+					}
+					tool		=> {
+						Asset::tool_call_external( &tool_run );						
+//					println!("Command {:?} not implemented", tool ),
+					},
 				}
 			}
 		}

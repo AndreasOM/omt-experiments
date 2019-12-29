@@ -1,4 +1,21 @@
-tool:    "atlas"
+
+# ${OMNITEXTURE} --phase=2 -x -b $BORDER -c false --mode=RGBA8888 --size=${SIZE} --data=${TMP_DIR} -o ${NAME}.otx ${FILES}
+#
+# buildAtlas --output "seaweed-atlas-%d" --size ${SIZE2} --border ${BORDER}\
+#   --inputs
+#     "Content/obstacles/seaweed/seaweed-g-*.png" \
+#     "Content/obstacles/seaweed/seaweed-b-*.png" \
+#     "Content/obstacles/seaweed/seaweed-f-*.png" \
+#     "Content/obstacles/seaweed/seaweed-c-*.png" \
+#     "Content/obstacles/seaweed/seaweed-a-*.png" \
+#     "Content/obstacles/seaweed/seaweed-e-*.png" \
+#     "Content/obstacles/corals/coral-*.png" \
+#     "Content/obstacles/other/*.png" \
+#     "Content/obstacles/seaweed/seaweed-d-*.png"
+
+# input(s) should always be last
+
+tool:    "echo"
 command: "combine"
 output:  "seaweed-atlas-%d"
 input:
@@ -8,5 +25,22 @@ input:
   - "test/something.png"
 parameters: {
   size: 2048,
-  border: 2
+  border: 2,
+#  input: "${inputs}"
 }
+cmd_line: "${tool} ${} --output ${output} --size ${size} --border ${border} --inputs ${input}"
+---
+tool:    "$asset"
+command: "dump"
+output:  "seaweed-atlas-%d"
+input:
+  - "seaweed/seaweed-g-*.png"
+  - "seaweed/seaweed-a-*.png"
+  - "corals/coral-*.png"
+  - "test/something.png"
+parameters: {
+  "--size": 2048,
+  "--border": 2,
+  "--mode": "RGBA"
+}
+---
