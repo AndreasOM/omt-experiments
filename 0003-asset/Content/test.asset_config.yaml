@@ -31,6 +31,26 @@ parameters: {
 cmd_line: "${tool} ${} --output ${output} --size ${size} --border ${border} --inputs ${input}"
 ---
 tool:    "$asset"
+command: "copy"
+output:  "copy_test.txt"
+input:
+  - "copy_test.txt"
+parameters: {   # :TODO: allow omitting empty parameters
+
+}
+cmd_line: ""    # :TODO: allow omitting empty/unneeded command line
+---
+tool:    "$asset"
+command: "copy"
+output:  "copy_test_2.txt"
+input:
+  - "copy_test_2.txt"
+parameters: {   # :TODO: allow omitting empty parameters
+
+}
+cmd_line: ""    # :TODO: allow omitting empty/unneeded command line
+---
+tool:    "$asset"
 command: "dump"
 output:  "seaweed-atlas-%d"
 input:

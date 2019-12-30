@@ -4,8 +4,10 @@ use glob::glob;
 use regex::Regex;
 use std::collections::HashMap;
 use std::fmt;
+use std::fs;
 use std::fs::File;
 use std::io::prelude::*;
+use std::path::Path;
 use std::process;
 use std::process::Command;
 use yaml_rust::YamlLoader;
@@ -27,6 +29,32 @@ impl fmt::Display for ParameterValue {
 
 		}
 //		write!(f, "FUU")
+	}
+}
+
+struct AssetBuild {
+	content_directory: String,
+	data_directory: String,
+	temp_directory: String,
+	archive: String,
+	paklist: String,
+}
+
+impl AssetBuild {
+	fn new(
+		content_directory: &str,
+		data_directory: &str,
+		temp_directory: &str,
+		archive: &str,
+		paklist: &str,
+	) -> AssetBuild {
+		AssetBuild {
+			content_directory: content_directory.to_string(),
+			data_directory:    data_directory.to_string(),
+			temp_directory:    temp_directory.to_string(),
+			archive:           archive.to_string(),
+			paklist:           paklist.to_string(),
+		}
 	}
 }
 
@@ -66,6 +94,7 @@ struct Asset{
 impl Asset{
 
 	fn tool_asset(
+		asset_build: &AssetBuild,
 		tool_run: &ToolRun,
 	)
 	-> Result<u32,&'static str> {
@@ -80,6 +109,20 @@ impl Asset{
 				println!("input     : {:?}", tool_run.input );
 				println!("parameters: {:?}", tool_run.parameters );
 				Ok(0)
+			},
+			"copy" => {
+				let source = tool_run.input[0].clone();
+				let dest = format!("{}/{}", asset_build.data_directory, tool_run.output );
+				match fs::copy( &source, &dest ) {
+					Ok( bytes ) => {
+						println!("📁 🔧 ✅ Copied {:?} bytes from {:?} to {:?}", bytes, &source, &dest);
+						Ok( 0 )
+					},
+					Err( e ) => {
+						println!("📁 🔧 ‼️ Error: Copying from {:?} to {:?}", &source, &dest);
+						Err( "Error while copying" )
+					},
+				}
 			},
 			cmd => {
 				println!("Unhandled asset tool command: {:?}", cmd );
@@ -127,17 +170,13 @@ impl Asset{
 
 
 	fn build (
-		content_directory: &String,
-		data_directory: &String,
-		temp_directory: &String,
-		archive: &String,
-		paklist: &String
+		asset_build: &AssetBuild,
 	)
 	-> Result<u32,&'static str> {
 
 		// find all asset_config.yaml
 		let mut config_files = Vec::new();
-		let config_glob = format!( "{}/**/*.asset_config.yaml", content_directory );
+		let config_glob = format!( "{}/**/*.asset_config.yaml", asset_build.content_directory );
 		for config_file in glob( &config_glob ).expect("Failed glob pattern") {
 			match config_file {
 				Err(e) => return Err( "Error finding config" ),
@@ -151,12 +190,15 @@ impl Asset{
 
 		for config_file in config_files {
 			// read yaml
-//			println!("===\n{:?}", config_file );
-			let mut file = File::open( config_file ).expect( "Failed opening file" );
+			println!("===\n{:?}", config_file );
+			let mut file = File::open( &config_file ).expect( "Failed opening file" );
 			let mut config = String::new();
 			file.read_to_string(&mut config).expect( "Failed reading file" );
 			let yaml = YamlLoader::load_from_str(&config).unwrap();
 
+			let config_file_path = Path::new(&config_file);
+			let asset_path = config_file_path.parent().unwrap_or( Path::new(".") );
+			println!("Asset Path {:?}", asset_path );
 			// parse yaml
 //			println!("YAML: {:?}", yaml );
 			for doc in yaml {
@@ -187,6 +229,14 @@ impl Asset{
 						None => {},
 					};
 				}
+
+//				println!("INPUT {:?}", input );
+				let input = input.iter().map( |i| {
+					format!( "{}/{}", asset_path.display(), i )
+				}).collect::<Vec<_>>();
+//				println!("INPUT {:?}", input );
+//				return Ok(1);
+
 //				let input = doc["input"].as_str();
 
 				let mut parameters = HashMap::new();
@@ -226,7 +276,7 @@ impl Asset{
 					"noop"		=> println!("NOOP -> Do nothing"),
 					"$asset"	=> {
 						println!("$asset command found");
-						Asset::tool_asset( &tool_run );
+						Asset::tool_asset( &asset_build, &tool_run );
 					}
 					"echo"		=> {
 						Asset::tool_call_external( &tool_run );
@@ -300,19 +350,23 @@ fn main() {
 		println!("archive          : {:?}", archive );
 		println!("paklist          : {:?}", paklist );
 
-		match Asset::build(
+		let asset_build = AssetBuild::new(
 			&content_directory,
 			&data_directory,
 			&temp_directory,
 			&archive,
-			&paklist
+			&paklist,
+		);
+
+		match Asset::build(
+			&asset_build,
 		) {
 			Ok( number_of_files ) => {
-					println!("{:?} assets build", number_of_files );
+					println!("📁 ✅ {:?} assets build", number_of_files );
 					process::exit( 0 );
 				},
 			Err( e ) => {
-				println!("Error {:?}", e );
+				println!("📁 ‼️ Error {:?}", e );
 				process::exit( -1 );
 			},
 		}
