@@ -164,8 +164,18 @@ impl Asset{
 //		let output = Command::new("/bin/sh").args(&["-c", "echo", ""]).output();
 //		let output = Command::new("/bin/sh").args(&["-c", "date", ""]).output();
 		let output = Command::new("/bin/sh").args(&["-c", &cmd_line]).output();
-		println!("Output: {:?}", output );
-		Ok(0)
+		match output {
+			Err(e) => Err("Error running external command"),
+			Ok( output ) => {
+				let stdout = String::from_utf8_lossy(&output.stdout);
+				let stderr = String::from_utf8_lossy(&output.stderr);
+
+				println!("stdout:\n{}", stdout );
+				println!("stderr:\n{}", stderr );
+				println!("return code: {}", output.status.code().unwrap_or(-255));
+				Ok(0)						
+			},
+		}
 	}
 
 
