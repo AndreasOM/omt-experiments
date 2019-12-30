@@ -101,7 +101,7 @@ impl Asset{
 		match tool_run.command.as_ref() {
 			"" => {
 				println!("NO command for asset tool" );
-				Ok(0)	// :TODO: return error
+				Err("NO command for asset tool" )
 			},
 			"dump" => {
 				println!("command.  : {:?}", tool_run.command );
@@ -116,7 +116,8 @@ impl Asset{
 				match fs::copy( &source, &dest ) {
 					Ok( bytes ) => {
 						println!("📁 🔧 ✅ Copied {:?} bytes from {:?} to {:?}", bytes, &source, &dest);
-						Ok( 0 )
+						let number_of_assets_updated = 1;
+						Ok( number_of_assets_updated )
 					},
 					Err( e ) => {
 						println!("📁 🔧 ‼️ Error: Copying from {:?} to {:?}", &source, &dest);
@@ -126,7 +127,7 @@ impl Asset{
 			},
 			cmd => {
 				println!("Unhandled asset tool command: {:?}", cmd );
-				Ok(0)	// :TODO: return error
+				Err( "Unhandled asset tool command" )
 			},
 		}
 	}
@@ -173,7 +174,9 @@ impl Asset{
 				println!("stdout:\n{}", stdout );
 				println!("stderr:\n{}", stderr );
 				println!("return code: {}", output.status.code().unwrap_or(-255));
-				Ok(0)						
+				
+				let number_of_assets_updated = 1;
+				Ok( number_of_assets_updated )
 			},
 		}
 	}
@@ -183,6 +186,8 @@ impl Asset{
 		asset_build: &AssetBuild,
 	)
 	-> Result<u32,&'static str> {
+
+		let mut number_of_assets_updated = 0;
 
 		// find all asset_config.yaml
 		let mut config_files = Vec::new();
@@ -286,20 +291,30 @@ impl Asset{
 					"noop"		=> println!("NOOP -> Do nothing"),
 					"$asset"	=> {
 						println!("$asset command found");
-						Asset::tool_asset( &asset_build, &tool_run );
-					}
-					"echo"		=> {
-						Asset::tool_call_external( &tool_run );
+						match Asset::tool_asset( &asset_build, &tool_run ) {
+							Ok( n ) => {
+								number_of_assets_updated += n;
+							},
+							Err( e ) => {
+
+							}
+						}
 					}
 					tool		=> {
-						Asset::tool_call_external( &tool_run );						
-//					println!("Command {:?} not implemented", tool ),
+						match Asset::tool_call_external( &tool_run ) {
+							Ok( n ) => {
+								number_of_assets_updated += n;
+							},
+							Err( e ) => {
+
+							}							
+						}
 					},
 				}
 			}
 		}
 
-		Ok(0)
+		Ok( number_of_assets_updated )
 	}
 }
 
@@ -372,7 +387,7 @@ fn main() {
 			&asset_build,
 		) {
 			Ok( number_of_files ) => {
-					println!("📁 ✅ {:?} assets build", number_of_files );
+					println!("📁 ✅ ~{:?} assets build", number_of_files );
 					process::exit( 0 );
 				},
 			Err( e ) => {
