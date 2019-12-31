@@ -1,6 +1,9 @@
 use crate::OmError;
 use image::{ DynamicImage, ImageBuffer, ImageFormat, GenericImage, GenericImageView };
 use regex::Regex;
+use std::fs::File;
+use std::io::Write;
+use std::path::Path;
 
 #[derive(Clone)]
 struct Entry{
@@ -142,6 +145,34 @@ impl Atlas {
 		}
 	}
 
+	fn save_atlas( &self, filename: &str ) -> Result< u32, OmError > {
+		let f = match File::create(filename) {
+			Ok( f ) => f,
+			Err( _ ) => return Err(OmError::Generic("io".to_string())),
+		};
+
+		Ok( 0 )
+	}
+
+	fn save_map( &self, filename: &str ) -> Result< u32, OmError > {
+		let mut f = match File::create(filename) {
+			Ok( f ) => f,
+			Err( _ ) => return Err(OmError::Generic("io".to_string())),
+		};
+
+//		println!("{:?}", self );
+
+		for e in &self.entries {
+//			println!("{:?}", e );
+			// overlay-00-title-square.png:0,0-2048,1536
+			let basename = Path::new(&e.filename).file_name().unwrap().to_str().unwrap();
+			let l = format!("{}:{},{}-{},{}\n", basename, 0, 0, e.width, e.height);
+//			println!("{}", l);
+			write!( f, "{}", l );
+		}
+		Ok( 0 )
+	}
+
 	pub fn hello() {
 		println!("Atlas::hello()");
 	}
@@ -190,10 +221,27 @@ impl Atlas {
 			println!("Atlas #{} {:?}", n, a );
 			let outname = simple_format_u32( output, n ); //format!(output, n);
 			let pngname = format!("{}.png", outname );
-			println!("{:?}", pngname);
+			let atlasname = format!("{}.atlas", outname );
+			let mapname = format!("{}.map", outname );
 			match a.save_png( &pngname ) {
 				Ok( bytes_written ) => {
-					println!("{:?} bytes written to {}", bytes_written, pngname );
+					println!("{:?} bytes written to image {}", bytes_written, pngname );
+				},
+				Err( e ) => {
+					return Err( e );
+				}
+			}
+			match a.save_atlas( &atlasname ) {
+				Ok( bytes_written ) => {
+					println!("{:?} bytes written to atlas {}", bytes_written, atlasname );
+				},
+				Err( e ) => {
+					return Err( e );
+				}
+			}
+			match a.save_map( &mapname ) {
+				Ok( bytes_written ) => {
+					println!("{:?} bytes written to map {}", bytes_written, atlasname );
 				},
 				Err( e ) => {
 					return Err( e );
