@@ -9,6 +9,8 @@ use std::path::Path;
 struct Entry{
 	filename:	String,
 	image:		Option<DynamicImage>,
+	x:			u32,
+	y:			u32,
 	width:		u32,
 	height:		u32,
 }
@@ -26,10 +28,12 @@ impl std::fmt::Debug for Entry {
 impl Entry {
 	fn new( filename: &str, width: u32, height: u32 ) -> Entry {
 		Entry{
-			filename: filename.to_string(),
-			image: None,
-			width: width,
-			height: height,
+			filename: 	filename.to_string(),
+			image: 		None,
+			x:			0,
+			y:			0,
+			width: 		width,
+			height: 	height,
 		}
 	}
 
@@ -37,6 +41,11 @@ impl Entry {
 		self.width  = image.dimensions().0;
 		self.height = image.dimensions().1;
 		self.image = Some( image );
+	}
+
+	fn set_position( &mut self, x: u32, y: u32 ) {
+		self.x = x;
+		self.y = y;
 	}
 }
 
@@ -63,6 +72,23 @@ fn simple_format_u32( f: &str, n: u32 ) -> String {
 
 	s.to_string()
 }
+#[derive(Debug)]
+struct Row {
+	y: u32,			// start of row
+	height: u32,
+	end_x: u32, 	// current end of row
+}
+
+impl Row {
+	fn new( y: u32, height: u32 ) -> Row {
+		Row {
+			y: y,
+			height: height,
+			end_x: 0
+		}
+	}
+}
+
 
 #[derive()]
 pub struct Atlas {
@@ -70,6 +96,8 @@ pub struct Atlas {
 	border: u32,
 	entries: Vec<Entry>,
 	image: Option<DynamicImage>,
+	rows: Vec<Row>,
+	used_height: u32,
 }
 
 impl std::fmt::Debug for Atlas {
@@ -90,6 +118,8 @@ impl Atlas {
 			border: border,
 			entries: Vec::new(),
 			image: Some( image::DynamicImage::new_rgba8(size, size) ),
+			rows: Vec::new(),
+			used_height: 0,
 		}
 	}
 	/* would prefer pass through with ownership transfer and return, but need more rust knowledge
@@ -97,45 +127,80 @@ impl Atlas {
 		Err( *entry )
 	*/
 
+	fn blit( dest: &mut image::DynamicImage, source: &image::DynamicImage, start_x: u32, start_y: u32 ) {
+		let w = source.dimensions().0;
+		let h = source.dimensions().1;
+
+		for y in 0..h {
+			for x in 0..w {
+				let dx = start_x + x;
+				let dy = start_y + y;
+
+				let pixel = image::Rgba( [255, x as u8, y as u8, 255] );
+				let pixel = source.get_pixel( x, y );
+				dest.put_pixel( dx, dy, pixel );
+			}
+		}
+	}
+	fn add_row( &mut self, height: u32 ) -> Option<usize> {
+		if height <= ( self.size - self.used_height ) {
+			let row = Row::new( self.used_height, height );
+			self.used_height += height;
+			let row_index = self.rows.len();
+			println!("Created row #{:?} at {:?}. {:?} used now.", row_index, row.y, self.used_height );
+			self.rows.push( row );
+			Some( row_index )
+		} else {
+			println!("Can not create row with {:?} height, {:?} used of {:?}", height, self.used_height, self.size );
+			None
+		}
+	}
 	fn add_entry( &mut self, entry: &Entry ) -> bool {
 		// check if it fits
 		// else return false
-		if self.entries.len() > 0 {
-			false 
-		} else if( self.size < entry.width || self.size < entry.height ) {
+		let h = entry.height;
+
+		if( self.size < entry.width || self.size < entry.height ) {
 			false
 		} else {
-			// add it
-			let mut e = entry.clone();
-			// blitting
-			let w = e.width;
-			let h = e.height;
-			let start_x = 0;
-			let start_y = 0;
-			let si = e.image.unwrap();
+			// find row
 
-			for y in 0..h {
-				for x in 0..w {
-					let dx = start_x + x;
-					let dy = start_y + y;
+			// or create new row
 
-					let pixel = image::Rgba( [255, x as u8, y as u8, 255] );
-					let pixel = si.get_pixel( x, y );
-					// :TODO: move unwrapping outside of loop
-					match &mut self.image {
-						None => {},
-						Some( di ) => {
-							di.put_pixel( dx, dy, pixel );
+			match self.add_row( h ) {
+				None => false,			// give up
+				Some( row_index ) => {
+					match self.rows.get_mut( row_index ) {
+						None => false,	// give up, should never happen
+						Some( row ) => {
+							println!("Got row {:?}", row );
+							if row.end_x > 0 {
+								false
+							} else {
+								// add it
+								let mut e = entry.clone();
+								// blitting
+								let x = row.end_x;
+								let y = row.y;
+								match &mut self.image {
+									None => {},
+									Some( di ) => {
+										Atlas::blit( di, &e.image.unwrap(), x, y );
+									},
+								}
+								row.end_x += e.width;
+								e.image = None;	// cleanup, data not needed anymore
+								e.set_position( x, y );
+								self.entries.push(
+									e
+								);
+								true
+							}
 						}
-					};
+					}
 				}
 			}
-			e.image = None;	// cleanup, data not needed anymore
-			self.entries.push(
-				e
-			);
-			true
-		}
+		} 
 	}
 
 	fn save_png( &self, filename: &str ) -> Result< u32, OmError > {
@@ -166,7 +231,7 @@ impl Atlas {
 //			println!("{:?}", e );
 			// overlay-00-title-square.png:0,0-2048,1536
 			let basename = Path::new(&e.filename).file_name().unwrap().to_str().unwrap();
-			let l = format!("{}:{},{}-{},{}\n", basename, 0, 0, e.width, e.height);
+			let l = format!("{}:{},{}-{},{}\n", basename, e.x, e.y, e.width, e.height);
 //			println!("{}", l);
 			write!( f, "{}", l );
 		}
