@@ -231,7 +231,7 @@ impl Atlas {
 //			println!("{:?}", e );
 			// overlay-00-title-square.png:0,0-2048,1536
 			let basename = Path::new(&e.filename).file_name().unwrap().to_str().unwrap();
-			let l = format!("{}:{},{}-{},{}\n", basename, e.x, e.y, e.width, e.height);
+			let l = format!("{}:{},{}-{},{}\n", basename, e.x, e.y, e.x+e.width, e.y+e.height);
 //			println!("{}", l);
 			write!( f, "{}", l );
 		}
