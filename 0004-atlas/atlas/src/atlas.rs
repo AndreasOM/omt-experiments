@@ -301,6 +301,10 @@ impl Atlas {
 		}
 
 		// sort entries by size
+		entries.sort_by( |a, b|
+			b.height.cmp( &a.height )	// higher ones first
+		);
+
 
 		let mut atlases: Vec<Atlas> = Vec::new();
 
