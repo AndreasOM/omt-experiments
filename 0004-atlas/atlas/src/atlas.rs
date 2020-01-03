@@ -207,8 +207,6 @@ impl Atlas {
 		}
 	}
 	fn add_entry( &mut self, entry: &Entry ) -> bool {
-		// check if it fits
-		// else return false
 		let h = entry.height;
 
 		if( self.size < entry.width || self.size < entry.height ) {
@@ -221,14 +219,22 @@ impl Atlas {
 				let r = &self.rows[ ri ];
 				if r.would_fit( entry.width, entry.height ) {
 					println!("Row {:?} would fit {:?}", r, entry );
-					candidates.push( ri );
+					if r.height < 2*entry.height {	// do not waste too much space, "2" is purely guessed
+						candidates.push( ri );
+					}
 				}
 			}
 
 			if candidates.len() > 0 {
-				// brute force use first candidate
-				println!("Got candidate rows. Using first one {:?}", candidates[ 0] );
-				self.add_entry_to_row_with_index( entry, candidates[ 0 ] )
+				// find best candidate
+				let mut best_candidate_index = 0;	// :TODO: actually find best candidate
+				/*
+				for ci in 0..candidates.len() {
+					//
+				}
+				*/
+				println!("Got candidate rows. Using best one {:?}", candidates[ best_candidate_index ] );
+				self.add_entry_to_row_with_index( entry, candidates[ best_candidate_index ] )
 			} else {
 				// or create new row
 				println!("No candidate row found creating new one. {:?}", self);
