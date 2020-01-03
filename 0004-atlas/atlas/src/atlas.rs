@@ -1,4 +1,5 @@
 use crate::OmError;
+use byteorder::{LittleEndian, WriteBytesExt};
 use image::{ DynamicImage, ImageBuffer, ImageFormat, GenericImage, GenericImageView };
 use regex::Regex;
 use std::fs::File;
@@ -47,6 +48,40 @@ impl Entry {
 		self.x = x;
 		self.y = y;
 	}
+	fn get_basename( &self ) -> String {
+		let basename = Path::new(&self.filename).file_name().unwrap().to_str().unwrap();
+		basename.to_string()
+	}
+/*
+		sx = s[ 0 ].to_f/size
+		sy = s[ 1 ].to_f/size
+		ex = e[ 0 ].to_f/size
+		ey = e[ 1 ].to_f/size
+
+		t.scaleX = (ex-sx)
+		t.scaleY = (ey-sy)
+
+		def getMatrix
+			# :HACK: :TODO: add rotation
+			[
+				@scaleX	, 0.0		, @x,
+				0.0		, @scaleY	, @y
+			]
+		end
+*/
+	fn get_matrix( &self, size: u32 ) -> [f32;6] {
+		// :TODO: cleanup please
+		let sx = self.x as f32 / size as f32;
+		let sy = self.y as f32 / size as f32;
+//		let ex = ( self.x + self.width ) as f32 / size as f32;
+//		let ey = ( self.y + self.height ) as f32 / size as f32;
+		let scale_x = self.width as f32 / size as f32; //ex - sx;
+		let scale_y = self.height as f32 / size as f32; //ey - sy;
+		[
+			scale_x, 0.0, sx,
+			0.0, scale_y, sy,
+		]
+	}	
 }
 
 fn simple_format_u32( f: &str, n: u32 ) -> String {
@@ -252,13 +287,71 @@ impl Atlas {
 			_ => Ok( 0 )
 		}
 	}
+/*
+def toAtlas( outfile, compress = false )
+		name = File.basename( outfile.path, ".atlas" )
+		data = ""
+		data += [ 0x4f53, 0x0001 ].pack( 'SS' )
+		data += [ 'O', 'M', 'A', 'T', 'L', 'A', 'S', compress ? 'Z' : 'S', 1, 0, 0, 0 ].pack( 'AAAAAAAACCCC' )
 
+		tmp = ""
+		tmp += [ @textures.size ].pack( 'S' )
+		@textures.each{ |texture|
+			p texture
+
+			# Matrix22 aka rot
+			# Vector2 aka pos/offset
+			m = texture.getMatrix
+			p m
+			tmp += [ texture.filename ].pack( 'a128' )
+			m.each{ |f|
+				tmp += [ f ].pack( 'F' )
+			}
+		}
+		c = Zlib::Deflate.deflate( tmp, 9 )
+		if compress
+			puts "Saving   compressed (#{tmp.size} -> #{c.size}): #{name} "
+			data += c
+		else
+			puts "Saving uncompressed (#{tmp.size} -> #{c.size}): #{name} "
+			data += tmp
+		end
+
+		outfile.write( data )
+	end
+	*/
 	fn save_atlas( &self, filename: &str ) -> Result< u32, OmError > {
-		let f = match File::create(filename) {
+		let mut f = match File::create(filename) {
 			Ok( f ) => f,
 			Err( _ ) => return Err(OmError::Generic("io".to_string())),
 		};
+		f.write_u16::<LittleEndian>( 0x4f53 ).unwrap();
+		f.write_u16::<LittleEndian>( 0x0001 ).unwrap();
+		let compress = 'S';
+		f.write_all(&[
+			0x4f, 0x4d, 0x41, 0x54, 0x4c, 0x41, 0x53,	// OMATLAS
+			compress as u8,
+			0x01, 0x00, 0x00, 0x00,
 
+		]).unwrap();
+		f.write_u16::<LittleEndian>( self.entries.len() as u16 ).unwrap();
+		for e in &self.entries {
+			let n = e.get_basename();
+			let mut c = 0;
+			for nn in n.as_bytes() {
+				f.write_u8( *nn ).unwrap();
+				c += 1;
+			}
+			while c < 128 {
+				f.write_u8( 0 ).unwrap();
+				c += 1;
+			}
+			let m = e.get_matrix( self.size );
+			println!("Matrix {:?}", m );
+			for mm in &m {
+				f.write_f32::<LittleEndian>( *mm ).unwrap();
+			}
+		}
 		Ok( 0 )
 	}
 
@@ -273,7 +366,7 @@ impl Atlas {
 		for e in &self.entries {
 //			println!("{:?}", e );
 			// overlay-00-title-square.png:0,0-2048,1536
-			let basename = Path::new(&e.filename).file_name().unwrap().to_str().unwrap();
+			let basename = e.get_basename();
 			let l = format!("{}:{},{}-{},{}\n", basename, e.x, e.y, e.x+e.width, e.y+e.height);
 //			println!("{}", l);
 			write!( f, "{}", l );
