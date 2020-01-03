@@ -75,16 +75,36 @@ fn simple_format_u32( f: &str, n: u32 ) -> String {
 #[derive(Debug)]
 struct Row {
 	y: u32,			// start of row
+	width: u32,
 	height: u32,
 	end_x: u32, 	// current end of row
 }
 
 impl Row {
-	fn new( y: u32, height: u32 ) -> Row {
+	fn new( y: u32, width: u32, height: u32 ) -> Row {
 		Row {
 			y: y,
+			width: width,
 			height: height,
 			end_x: 0
+		}
+	}
+
+	fn would_fit( &self, w: u32, h: u32 ) -> bool {
+		if self.height >= h {
+			let available_space = self.width - self.end_x;
+			if available_space >= w {
+				true
+			} else {
+				// not enough space
+				println!("Row {:?} not enough space for {:?}", self, w );
+				false
+			}
+
+		} else {
+			// not high enough
+			println!("Row {:?} not high enough for {:?}", self, h );
+			false
 		}
 	}
 }
@@ -144,7 +164,7 @@ impl Atlas {
 	}
 	fn add_row( &mut self, height: u32 ) -> Option<usize> {
 		if height <= ( self.size - self.used_height ) {
-			let row = Row::new( self.used_height, height );
+			let row = Row::new( self.used_height, self.size, height );
 			self.used_height += height;
 			let row_index = self.rows.len();
 			println!("Created row #{:?} at {:?}. {:?} used now.", row_index, row.y, self.used_height );
@@ -153,6 +173,37 @@ impl Atlas {
 		} else {
 			println!("Can not create row with {:?} height, {:?} used of {:?}", height, self.used_height, self.size );
 			None
+		}
+	}
+	fn add_entry_to_row_with_index( &mut self, entry: &Entry, row_index: usize ) -> bool {
+		match self.rows.get_mut( row_index ) {
+			None => false,	// give up, should never happen
+			Some( row ) => {
+				println!("Got row {:?}", row );
+				if row.would_fit( entry.width, entry.height  ) {
+					// add it
+					let mut e = entry.clone();
+					// blitting
+					let x = row.end_x;
+					let y = row.y;
+					match &mut self.image {
+						None => {},
+						Some( di ) => {
+							Atlas::blit( di, &e.image.unwrap(), x, y );
+						},
+					}
+					row.end_x += e.width;
+					e.image = None;	// cleanup, data not needed anymore
+					e.set_position( x, y );
+					self.entries.push(
+						e
+					);
+					true
+				} else {
+					println!("Row {:?} would not fit {:?}", row, entry );
+					false
+				}
+			}
 		}
 	}
 	fn add_entry( &mut self, entry: &Entry ) -> bool {
@@ -164,40 +215,26 @@ impl Atlas {
 			false
 		} else {
 			// find row
+			let mut candidates = Vec::new();
 
-			// or create new row
+			for ri in 0..self.rows.len() {
+				let r = &self.rows[ ri ];
+				if r.would_fit( entry.width, entry.height ) {
+					println!("Row {:?} would fit {:?}", r, entry );
+					candidates.push( ri );
+				}
+			}
 
-			match self.add_row( h ) {
-				None => false,			// give up
-				Some( row_index ) => {
-					match self.rows.get_mut( row_index ) {
-						None => false,	// give up, should never happen
-						Some( row ) => {
-							println!("Got row {:?}", row );
-							if row.end_x > 0 {
-								false
-							} else {
-								// add it
-								let mut e = entry.clone();
-								// blitting
-								let x = row.end_x;
-								let y = row.y;
-								match &mut self.image {
-									None => {},
-									Some( di ) => {
-										Atlas::blit( di, &e.image.unwrap(), x, y );
-									},
-								}
-								row.end_x += e.width;
-								e.image = None;	// cleanup, data not needed anymore
-								e.set_position( x, y );
-								self.entries.push(
-									e
-								);
-								true
-							}
-						}
-					}
+			if candidates.len() > 0 {
+				// brute force use first candidate
+				println!("Got candidate rows. Using first one {:?}", candidates[ 0] );
+				self.add_entry_to_row_with_index( entry, candidates[ 0 ] )
+			} else {
+				// or create new row
+				println!("No candidate row found creating new one. {:?}", self);
+				match self.add_row( h ) {
+					None				=> false,													// give up
+					Some( row_index )	=> self.add_entry_to_row_with_index( entry, row_index ),
 				}
 			}
 		} 
@@ -273,8 +310,8 @@ impl Atlas {
 			if !did_fit {
 				let mut a = Atlas::new( size, border );
 				if !a.add_entry( &e ) {
-					println!("Image doesn't fit into empty atlas {:?}", e );
-					return Err(OmError::Generic("Image doesn't fit into empty atlas".to_string()));
+					println!("‼️ Image doesn't fit into empty atlas {:?}", e );
+					return Err(OmError::Generic("‼️ Image doesn't fit into empty atlas".to_string()));
 				}
 				atlases.push( a );				
 			}
