@@ -1,9 +1,9 @@
 use crate::OmError;
-use byteorder::{LittleEndian, WriteBytesExt};
+use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
 use image::{ DynamicImage, ImageBuffer, ImageFormat, GenericImage, GenericImageView };
 use regex::Regex;
 use std::fs::File;
-use std::io::Write;
+use std::io::{BufRead, BufReader, Read, Write};
 use std::path::Path;
 
 #[derive(Clone)]
@@ -21,6 +21,8 @@ impl std::fmt::Debug for Entry {
 		f.debug_struct("Entry")
 			.field("filename", &self.filename)
 //			.field("image", if self.image.is_some() {"YES"} else {"NO"} )
+			.field("x", &self.x)
+			.field("y", &self.y)
 			.field("width", &self.width)
 			.field("height", &self.height)
 			.finish()
@@ -177,10 +179,24 @@ impl Atlas {
 			used_height: 0,
 		}
 	}
-	/* would prefer pass through with ownership transfer and return, but need more rust knowledge
-	fn add_entry( &mut self, entry: &Entry ) -> Result<usize, Entry> {
-		Err( *entry )
-	*/
+
+	fn new_from_atlas( atlasname: &str, size: u32 ) -> Atlas {
+		let mut a = Atlas {
+			size: size,
+			border: 0,
+			entries: Vec::new(),
+			image: None,
+			rows: Vec::new(),
+			used_height:0 ,
+		};
+
+		match a.load_atlas( &atlasname, a.size ) {
+			Err( e ) => println!("{:?}", e ),
+			_ => {},
+		};
+
+		a
+	}
 
 	fn blit( dest: &mut image::DynamicImage, source: &image::DynamicImage, start_x: u32, start_y: u32 ) {
 		let w = source.dimensions().0;
@@ -241,6 +257,10 @@ impl Atlas {
 			}
 		}
 	}
+	/* would prefer pass through with ownership transfer and return, but need more rust knowledge
+	fn add_entry( &mut self, entry: &Entry ) -> Result<usize, Entry> {
+		Err( *entry )
+	*/
 	fn add_entry( &mut self, entry: &Entry ) -> bool {
 		let h = entry.height;
 
@@ -287,39 +307,74 @@ impl Atlas {
 			_ => Ok( 0 )
 		}
 	}
-/*
-def toAtlas( outfile, compress = false )
-		name = File.basename( outfile.path, ".atlas" )
-		data = ""
-		data += [ 0x4f53, 0x0001 ].pack( 'SS' )
-		data += [ 'O', 'M', 'A', 'T', 'L', 'A', 'S', compress ? 'Z' : 'S', 1, 0, 0, 0 ].pack( 'AAAAAAAACCCC' )
 
-		tmp = ""
-		tmp += [ @textures.size ].pack( 'S' )
-		@textures.each{ |texture|
-			p texture
+	fn load_atlas( &mut self, filename: &str, size: u32 ) -> Result< u32, OmError > {
+		let f = match File::open(filename) {
+			Ok( f ) => f,
+			Err( _ ) => return Err(OmError::Generic("io".to_string())),
+		};
 
-			# Matrix22 aka rot
-			# Vector2 aka pos/offset
-			m = texture.getMatrix
-			p m
-			tmp += [ texture.filename ].pack( 'a128' )
-			m.each{ |f|
-				tmp += [ f ].pack( 'F' )
+		let mut bufreader = BufReader::new( f );
+		let magic = match bufreader.read_u16::<LittleEndian>() { //.unwrap_or( 0xffff );
+			Ok( m ) => m,
+			x => {
+				println!("{:?}", x);
+				return Err(OmError::Generic("reading from buffer".to_string()))
+			},
+		};
+		if magic != 0x4f53 {
+			println!("Got magic {:?} from {:?}", magic, bufreader);
+			return Err( OmError::Generic("Broken file magic".to_string() ) );
+		}
+		let v = bufreader.read_u16::<LittleEndian>().unwrap_or( 0 );
+		if( v != 1 ) {
+			return Err( OmError::Generic("Wrong version".to_string() ) );
+		}
+		let chunk_magic = [ 0x4fu8, 0x4d, 0x41, 0x54, 0x4c, 0x41, 0x53, ];
+		for m in &chunk_magic {
+			let b = bufreader.read_u8().unwrap_or( 0 );
+			if( b != *m ) {
+				return Err( OmError::Generic("Broken chunk magic".to_string() ) );
 			}
 		}
-		c = Zlib::Deflate.deflate( tmp, 9 )
-		if compress
-			puts "Saving   compressed (#{tmp.size} -> #{c.size}): #{name} "
-			data += c
-		else
-			puts "Saving uncompressed (#{tmp.size} -> #{c.size}): #{name} "
-			data += tmp
-		end
+		let flags = bufreader.read_u8().unwrap_or( 0 );
+		if( flags != 'S' as u8 ) {
+			return Err( OmError::Generic( ":TODO: compression not implemented".to_string() ) );
+		}
+		let chunk_version = [ 0x01u8, 0x00, 0x00, 0x00 ];
+		for m in &chunk_version {
+			let b = bufreader.read_u8().unwrap_or( 0 );
+			if( b != *m ) {
+				return Err( OmError::Generic("Broken chunk version".to_string() ) );
+			}
+		}
+		let entry_count = bufreader.read_u16::<LittleEndian>( ).unwrap_or( 0 );
 
-		outfile.write( data )
-	end
-	*/
+		println!("Got {:?} entries", entry_count );
+
+		for ei in 0..entry_count {
+			let mut name_buffer = [0u8;128];
+			bufreader.read_exact(&mut name_buffer).unwrap();
+			let mut name = String::from_utf8(name_buffer.to_vec()).unwrap();
+			let first_zero = name.find( "\u{0}" ).unwrap_or( name.len() );
+			name.truncate( first_zero );
+			let mut matrix_buffer = [0f32;6];
+			for m in &mut matrix_buffer {
+				*m = bufreader.read_f32::<LittleEndian>().unwrap_or( 0.0 );
+			}
+
+			let w = ( matrix_buffer[ 0*3 + 0 ] * size as f32 ).trunc() as u32;
+			let h = ( matrix_buffer[ 1*3 + 1 ] * size as f32 ).trunc() as u32;
+			let mut e = Entry::new( &name, w, h );
+			let x = ( matrix_buffer[ 0*3 + 2 ] * size as f32 ).trunc() as u32;
+			let y = ( matrix_buffer[ 1*3 + 2 ] * size as f32 ).trunc() as u32;
+			e.set_position( x, y );
+			self.entries.push( e );
+		}
+		Ok( 0 )
+	}
+
+	// :TODO: support compression
 	fn save_atlas( &self, filename: &str ) -> Result< u32, OmError > {
 		let mut f = match File::create(filename) {
 			Ok( f ) => f,
@@ -377,6 +432,34 @@ def toAtlas( outfile, compress = false )
 	pub fn hello() {
 		println!("Atlas::hello()");
 	}
+	pub fn info(
+		input: &str
+	) -> Result<u32,OmError>{
+		let mut n = 0;
+		while true {
+			let inname = simple_format_u32( input, n ); //format!(output, n);
+			let atlasname = format!("{}.atlas", inname );
+			if !Path::new( &atlasname ).exists() {
+				println!("{:?} not found. Stopping", atlasname );
+				break;
+			}
+			// load image, to get the size
+			let a = Atlas::new_from_atlas( &atlasname, 2048 );	// :HACK: hardcoded size
+			// add image to atlas
+			println!("Atlas");
+			println!("\tSize  : {}", a.size);
+			println!("\tBorder: {}", a.border);
+			for e in &a.entries {
+				println!("\t\t{:>5} x {:>5}  @  {:>5},{:>5}   | {}", e.width, e.height, e.x, e.y, e.filename );
+			}
+
+			n += 1;
+		}
+
+
+		Ok( n )	
+	}
+
 	pub fn combine(
 		output: &str, size: u32, border: u32, input: &Vec<&str> 
 	) -> Result<u32, OmError>{
