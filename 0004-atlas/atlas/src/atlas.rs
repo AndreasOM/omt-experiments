@@ -439,14 +439,26 @@ impl Atlas {
 		while true {
 			let inname = simple_format_u32( input, n ); //format!(output, n);
 			let atlasname = format!("{}.atlas", inname );
+			let pngname = format!("{}.png", inname );
 			if !Path::new( &atlasname ).exists() {
 				println!("{:?} not found. Stopping", atlasname );
 				break;
 			}
+			if !Path::new( &pngname ).exists() {
+				println!("{:?} not found. Stopping", pngname );
+				break;
+			}
 			// load image, to get the size
-			let a = Atlas::new_from_atlas( &atlasname, 2048 );	// :HACK: hardcoded size
+			let img = image::open(&pngname).unwrap();
+			if img.dimensions().0 != img.dimensions().1 {
+				println!("Error: Non-square texture atlas found with dimensions {:?}", img.dimensions());
+			}
+
+			let size = img.dimensions().0;
+
+			let a = Atlas::new_from_atlas( &atlasname, size );
 			// add image to atlas
-			println!("Atlas");
+			println!("Atlas {} {}", atlasname, pngname);
 			println!("\tSize  : {}", a.size);
 			println!("\tBorder: {}", a.border);
 			for e in &a.entries {
