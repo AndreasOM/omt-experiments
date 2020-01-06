@@ -1,9 +1,9 @@
 use crate::OmError;
 use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
-use image::{ DynamicImage, ImageBuffer, ImageFormat, GenericImage, GenericImageView };
+use image::{ DynamicImage, ImageFormat, GenericImage, GenericImageView };
 use regex::Regex;
 use std::fs::File;
-use std::io::{BufRead, BufReader, Read, Write};
+use std::io::{BufReader, Read, Write};
 use std::path::Path;
 
 #[derive(Clone)]
@@ -134,20 +134,20 @@ impl Row {
 				true
 			} else {
 				// not enough space
-				println!("Row {:?} not enough space for {:?}", self, w );
+//				println!("Row {:?} not enough space for {:?}", self, w );
 				false
 			}
 
 		} else {
 			// not high enough
-			println!("Row {:?} not high enough for {:?}", self, h );
+//			println!("Row {:?} not high enough for {:?}", self, h );
 			false
 		}
 	}
 }
 
 
-#[derive()]
+//#[derive()]
 pub struct Atlas {
 	size: u32,
 	border: u32,
@@ -207,7 +207,6 @@ impl Atlas {
 				let dx = start_x + x;
 				let dy = start_y + y;
 
-				let pixel = image::Rgba( [255, x as u8, y as u8, 255] );
 				let pixel = source.get_pixel( x, y );
 				dest.put_pixel( dx, dy, pixel );
 			}
@@ -218,11 +217,11 @@ impl Atlas {
 			let row = Row::new( self.used_height, self.size, height );
 			self.used_height += height;
 			let row_index = self.rows.len();
-			println!("Created row #{:?} at {:?}. {:?} used now.", row_index, row.y, self.used_height );
+//			println!("Created row #{:?} at {:?}. {:?} used now.", row_index, row.y, self.used_height );
 			self.rows.push( row );
 			Some( row_index )
 		} else {
-			println!("Can not create row with {:?} height, {:?} used of {:?}", height, self.used_height, self.size );
+//			println!("Can not create row with {:?} height, {:?} used of {:?}", height, self.used_height, self.size );
 			None
 		}
 	}
@@ -230,7 +229,7 @@ impl Atlas {
 		match self.rows.get_mut( row_index ) {
 			None => false,	// give up, should never happen
 			Some( row ) => {
-				println!("Got row {:?}", row );
+//				println!("Got row {:?}", row );
 				if row.would_fit( entry.width, entry.height  ) {
 					// add it
 					let mut e = entry.clone();
@@ -251,7 +250,7 @@ impl Atlas {
 					);
 					true
 				} else {
-					println!("Row {:?} would not fit {:?}", row, entry );
+//					println!("Row {:?} would not fit {:?}", row, entry );
 					false
 				}
 			}
@@ -264,7 +263,7 @@ impl Atlas {
 	fn add_entry( &mut self, entry: &Entry ) -> bool {
 		let h = entry.height;
 
-		if( self.size < entry.width || self.size < entry.height ) {
+		if self.size < entry.width || self.size < entry.height {
 			false
 		} else {
 			// find row
@@ -273,7 +272,7 @@ impl Atlas {
 			for ri in 0..self.rows.len() {
 				let r = &self.rows[ ri ];
 				if r.would_fit( entry.width, entry.height ) {
-					println!("Row {:?} would fit {:?}", r, entry );
+//					println!("Row {:?} would fit {:?}", r, entry );
 					if r.height < 2*entry.height {	// do not waste too much space, "2" is purely guessed
 						candidates.push( ri );
 					}
@@ -282,17 +281,17 @@ impl Atlas {
 
 			if candidates.len() > 0 {
 				// find best candidate
-				let mut best_candidate_index = 0;	// :TODO: actually find best candidate
+				let best_candidate_index = 0;	// :TODO: actually find best candidate
 				/*
 				for ci in 0..candidates.len() {
 					//
 				}
 				*/
-				println!("Got candidate rows. Using best one {:?}", candidates[ best_candidate_index ] );
+//				println!("Got candidate rows. Using best one {:?}", candidates[ best_candidate_index ] );
 				self.add_entry_to_row_with_index( entry, candidates[ best_candidate_index ] )
 			} else {
 				// or create new row
-				println!("No candidate row found creating new one. {:?}", self);
+//				println!("No candidate row found creating new one. {:?}", self);
 				match self.add_row( h ) {
 					None				=> false,													// give up
 					Some( row_index )	=> self.add_entry_to_row_with_index( entry, row_index ),
@@ -327,24 +326,24 @@ impl Atlas {
 			return Err( OmError::Generic("Broken file magic".to_string() ) );
 		}
 		let v = bufreader.read_u16::<LittleEndian>().unwrap_or( 0 );
-		if( v != 1 ) {
+		if v != 1 {
 			return Err( OmError::Generic("Wrong version".to_string() ) );
 		}
 		let chunk_magic = [ 0x4fu8, 0x4d, 0x41, 0x54, 0x4c, 0x41, 0x53, ];
 		for m in &chunk_magic {
 			let b = bufreader.read_u8().unwrap_or( 0 );
-			if( b != *m ) {
+			if b != *m {
 				return Err( OmError::Generic("Broken chunk magic".to_string() ) );
 			}
 		}
 		let flags = bufreader.read_u8().unwrap_or( 0 );
-		if( flags != 'S' as u8 ) {
+		if flags != 'S' as u8 {
 			return Err( OmError::Generic( ":TODO: compression not implemented".to_string() ) );
 		}
 		let chunk_version = [ 0x01u8, 0x00, 0x00, 0x00 ];
 		for m in &chunk_version {
 			let b = bufreader.read_u8().unwrap_or( 0 );
-			if( b != *m ) {
+			if b != *m {
 				return Err( OmError::Generic("Broken chunk version".to_string() ) );
 			}
 		}
@@ -352,7 +351,7 @@ impl Atlas {
 
 		println!("Got {:?} entries", entry_count );
 
-		for ei in 0..entry_count {
+		for _ei in 0..entry_count {
 			let mut name_buffer = [0u8;128];
 			bufreader.read_exact(&mut name_buffer).unwrap();
 			let mut name = String::from_utf8(name_buffer.to_vec()).unwrap();
@@ -402,7 +401,7 @@ impl Atlas {
 				c += 1;
 			}
 			let m = e.get_matrix( self.size );
-			println!("Matrix {:?}", m );
+//			println!("Matrix {:?}", m );
 			for mm in &m {
 				f.write_f32::<LittleEndian>( *mm ).unwrap();
 			}
@@ -424,7 +423,7 @@ impl Atlas {
 			let basename = e.get_basename();
 			let l = format!("{}:{},{}-{},{}\n", basename, e.x, e.y, e.x+e.width, e.y+e.height);
 //			println!("{}", l);
-			write!( f, "{}", l );
+			write!( f, "{}", l ).unwrap();
 		}
 		Ok( 0 )
 	}
@@ -436,7 +435,7 @@ impl Atlas {
 		input: &str
 	) -> Result<u32,OmError>{
 		let mut n = 0;
-		while true {
+		loop {
 			let inname = simple_format_u32( input, n ); //format!(output, n);
 			let atlasname = format!("{}.atlas", inname );
 			let pngname = format!("{}.png", inname );
@@ -468,20 +467,21 @@ impl Atlas {
 			n += 1;
 		}
 
-
-		Ok( n )	
+		if n == 0 {
+			Err(OmError::Generic("No matching atlas found.".to_string()))
+		} else {
+			Ok( n )	
+		}
 	}
 
 	pub fn combine(
 		output: &str, size: u32, border: u32, input: &Vec<&str> 
 	) -> Result<u32, OmError>{
-		println!("Atlas::combine()");
 		let mut entries = Vec::new();
 		// collect inputs
 		for i in input {
-			println!("Analysing {:?}", i );
+//			println!("Analysing {:?}", i );
 			let img = image::open(i).unwrap();
-			println!("dimensions {:?}", img.dimensions());
 
 			let mut e = Entry::new( i, 0, 0 );
 			e.set_image( img );
@@ -518,30 +518,30 @@ impl Atlas {
 		// write outputs
 		let mut n = 0;
 		for a in atlases {
-			println!("Atlas #{} {:?}", n, a );
+//			println!("Atlas #{} {:?}", n, a );
 			let outname = simple_format_u32( output, n ); //format!(output, n);
 			let pngname = format!("{}.png", outname );
 			let atlasname = format!("{}.atlas", outname );
 			let mapname = format!("{}.map", outname );
 			match a.save_png( &pngname ) {
-				Ok( bytes_written ) => {
-					println!("{:?} bytes written to image {}", bytes_written, pngname );
+				Ok( _bytes_written ) => {
+//					println!("{:?} bytes written to image {}", bytes_written, pngname );
 				},
 				Err( e ) => {
 					return Err( e );
 				}
 			}
 			match a.save_atlas( &atlasname ) {
-				Ok( bytes_written ) => {
-					println!("{:?} bytes written to atlas {}", bytes_written, atlasname );
+				Ok( _bytes_written ) => {
+//					println!("{:?} bytes written to atlas {}", bytes_written, atlasname );
 				},
 				Err( e ) => {
 					return Err( e );
 				}
 			}
 			match a.save_map( &mapname ) {
-				Ok( bytes_written ) => {
-					println!("{:?} bytes written to map {}", bytes_written, atlasname );
+				Ok( _bytes_written ) => {
+//					println!("{:?} bytes written to map {}", bytes_written, atlasname );
 				},
 				Err( e ) => {
 					return Err( e );
@@ -550,7 +550,6 @@ impl Atlas {
 			n += 1;
 		}
 
-		Err(OmError::NotImplemented("".to_string()))
-//		Ok(0)
+		Ok( n )
 	}
 }

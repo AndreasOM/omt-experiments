@@ -52,9 +52,7 @@ fn main() {
 		let output = sub_matches.value_of("output").unwrap_or("output-atlas-%d").to_string();
 		let size   = sub_matches.value_of("size").unwrap_or("2048").to_string();
 		let border = sub_matches.value_of("border").unwrap_or("0").to_string();
-		let input: Vec<String> = Vec::new();
 		let input  = sub_matches.values_of("input").unwrap().collect::<Vec<_>>(); 
-//		let input  = sub_matches.value_of("input").unwrap_or("input.png").to_string();
 
 		let size = match u32::from_str_radix( &size, 10 ) {
 			Ok( n ) => n,
@@ -75,10 +73,20 @@ fn main() {
 		println!("output         : {:?}", output );
 		println!("size           : {:?}", size );
 		println!("border         : {:?}", border );
-		println!("input          : {:?}", input );
+//		println!("input          : {:?}", input );
+		println!("input          : [" );
+		for i in &input {
+			println!("\t{:?}", i );
+		}
+		println!("]" );
 
 		match Atlas::combine( &output, size, border, &input ) {
-			Ok( _ ) => {
+			Ok( 1 ) => {
+				println!("1 atlas created" );
+				process::exit( 0 );
+			},
+			Ok( n ) => {
+				println!("{:?} atlases created", n );
 				process::exit( 0 );
 			},
 			Err( e ) => {
@@ -96,7 +104,11 @@ fn main() {
 				process::exit( 0 );
 			},
 			Err( e ) => {
-				println!("Error getting info from  atlas >{:?}>", e );
+				println!("Error getting info from  atlas." );
+				match e {
+					OmError::NotImplemented( e ) => println!("NotImplemented: {:?}", e ),
+					OmError::Generic( e ) => println!("Generic: {:?}", e ),
+				};
 				process::exit( -1 );
 			}
 		}
